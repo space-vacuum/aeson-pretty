@@ -1,6 +1,6 @@
 cabal-version:  2.0
 name:           aeson-pretty
-version:        0.8.10
+version:        0.9.0
 license:        BSD3
 license-file:   LICENSE
 category:       Text, Web, JSON, Pretty Printer
