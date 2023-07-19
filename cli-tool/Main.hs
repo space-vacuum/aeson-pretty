@@ -46,9 +46,9 @@ main :: IO ()
 main = do
     Opts{..} <- cmdArgs opts
     let conf = Config { confIndent          = Spaces indent
-                      , confCompare         = if sort then compare else mempty
                       , confNumFormat       = Generic
                       , confTrailingNewline = False
+                      , confModify          = if sort then Just sortValue else Nothing
                       }
         enc = if compact then encode else encodePretty' conf
     interact $ unlines . map enc . values
