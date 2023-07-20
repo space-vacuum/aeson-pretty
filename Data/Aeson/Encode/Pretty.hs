@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, RecordWildCards, CPP #-}
+{-# LANGUAGE OverloadedStrings, RecordWildCards, CPP, ViewPatterns #-}
 
 -- |Aeson-compatible pretty-printing of JSON 'Value's.
 module Data.Aeson.Encode.Pretty (
@@ -61,6 +61,7 @@ data PState = PState { pLevel     :: Int
                      , pItemSep   :: Builder
                      , pKeyValSep :: Builder
                      , pNumFormat :: NumberFormat
+                     , pModify    :: Maybe (Value -> Value)
                      }
 
 -- | Indentation per level of nesting. @'Spaces' 0@ removes __all__ whitespace
@@ -120,9 +121,12 @@ encodePrettyToTextBuilder = encodePrettyToTextBuilder' defConfig
 -- |A variant of 'Aeson.encodeToTextBuilder' that takes an additional configuration
 --  parameter.
 encodePrettyToTextBuilder' :: ToJSON a => Config -> a -> Builder
-encodePrettyToTextBuilder' Config{..} x = fromValue st (fromMaybe sortValue confModify $ toJSON x) <> trail
+encodePrettyToTextBuilder' Config{..} x =
+  fromValue st (topModify $ toJSON x) <> trail
   where
-    st      = PState 0 indent newline itemSep kvSep confNumFormat
+    topModify = fromMaybe sortValue confModify
+
+    st      = PState 0 indent newline itemSep kvSep confNumFormat confModify
     indent  = case confIndent of
                 Spaces n -> mconcat (replicate n " ")
                 Tab      -> "\t"
@@ -135,12 +139,11 @@ encodePrettyToTextBuilder' Config{..} x = fromValue st (fromMaybe sortValue conf
                 _        -> ": "
     trail   = if confTrailingNewline then "\n" else ""
 
-
 fromValue :: PState -> Value -> Builder
-fromValue st@PState{} = go
+fromValue st@PState{pModify = fromMaybe id -> modify} = go
   where
-    go (Array v)  = fromCompound st ("[","]") fromValue (V.toList v)
-    go (Object m) = fromCompound st ("{","}") fromPair (toList' m)
+    go a@Array{} = let (Array v) = modify a in fromCompound st ("[","]") fromValue (V.toList v)
+    go o@Object{} = let (Object m) = modify o in fromCompound st ("{","}") fromPair (toList' m)
     go (Number x) = fromNumber st x
     go v          = Aeson.encodeToTextBuilder v
 
