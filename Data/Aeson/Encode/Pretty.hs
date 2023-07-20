@@ -25,10 +25,16 @@ import qualified Data.Aeson.KeyMap as AKM
 import Data.Aeson (Value(..), ToJSON(..))
 import Data.Aeson.Extra (ValueF(..))
 import Data.Functor.Foldable (cata, embed)
+import Data.Maybe (fromMaybe)
 import Data.Sequences (sort)
 import qualified Data.Aeson.Text as Aeson
 import Data.ByteString.Lazy (ByteString)
-import qualified Data.HashMap.Strict as H (fromList, toList)
+import qualified Data.HashMap.Strict as H
+  ( fromList, toList
+#if !MIN_VERSION_aeson(2,0,0)
+  , HashMap
+#endif
+  )
 import Data.List (intersperse)
 #if !MIN_VERSION_base(4,13,0)
 import Data.Semigroup ((<>))
@@ -90,7 +96,7 @@ data Config = Config
 --  > defConfig = Config { confIndent = Spaces 4, confNumFormat = Generic, confTrailingNewline = False, confModify = id }
 defConfig :: Config
 defConfig =
-  Config {confIndent = Spaces 4, confNumFormat = Generic, confTrailingNewline = False, confModify = Just $ sortValue}
+  Config {confIndent = Spaces 4, confNumFormat = Generic, confTrailingNewline = False, confModify = Just sortValue}
 
 -- |A drop-in replacement for aeson's 'Aeson.encode' function, producing
 --  JSON-ByteStrings for human readers.
@@ -114,7 +120,7 @@ encodePrettyToTextBuilder = encodePrettyToTextBuilder' defConfig
 -- |A variant of 'Aeson.encodeToTextBuilder' that takes an additional configuration
 --  parameter.
 encodePrettyToTextBuilder' :: ToJSON a => Config -> a -> Builder
-encodePrettyToTextBuilder' Config{..} x = fromValue st (maybe (toJSON x) ($ toJSON x) confModify) <> trail
+encodePrettyToTextBuilder' Config{..} x = fromValue st (fromMaybe sortValue confModify $ toJSON x) <> trail
   where
     st      = PState 0 indent newline itemSep kvSep confNumFormat
     indent  = case confIndent of
@@ -139,9 +145,11 @@ fromValue st@PState{} = go
     go v          = Aeson.encodeToTextBuilder v
 
 #if MIN_VERSION_aeson(2,0,0)
-    toList' = fmap (\(k, v) -> (AK.toText k, v)) . AKM.toList
+toList' :: AKM.KeyMap b -> [(Text, b)]
+toList' = fmap (\(k, v) -> (AK.toText k, v)) . AKM.toList
 #else
-    toList' = H.toList
+toList' :: H.HashMap k v -> [(k, v)]
+toList' = H.toList
 #endif
 
 fromCompound :: PState
